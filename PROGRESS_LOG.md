@@ -39,6 +39,26 @@ Location: `phase0/` (Python venv + two scripts: `capture.py`, `transcribe.py`)
 - Fix used: installed the pip-packaged versions (`nvidia-cublas-cu12`, `nvidia-cudnn-cu12`, which bundle the DLLs under `site-packages/nvidia/*/bin`) instead of requiring a multi-GB NVIDIA Toolkit install.
 - **Important detail**: `os.add_dll_directory()` alone was NOT sufficient — CTranslate2's native code loads these libraries via plain `LoadLibrary` (not `LoadLibraryEx` with search-path flags), which only honors `%PATH%`. The working fix prepends the DLL bin folders to `os.environ["PATH"]` at runtime before importing `faster_whisper`. **The Phase 1 C#/.NET app will hit the same underlying issue** (missing cuBLAS/cuDNN at the OS level) and will need an equivalent fix — either bundling the same DLLs alongside the app, or documenting a one-time setup step for the user.
 
+## 2026-07-28 — Phase 1: COMPLETE (built in Python, not C#/.NET)
+
+**Stack change from the original brief**: at build time, this machine had no .NET SDK installed. Rather than requiring a ~1-2GB SDK install and re-solving the CUDA DLL problem in a different library (Whisper.net/whisper.cpp instead of the already-proven faster-whisper), the user chose to build entirely in Python, reusing Phase 0's exact capture/transcription code. Given the trigger is manual-only (not an always-on service), C#/.NET's main advantage — reliability as a background service — mattered less, making this the pragmatic choice.
+
+**What was built**, in `app/` (own venv, same dependency set as `phase0/` plus `pystray`, `Pillow`, `keyboard`, `PyYAML`):
+- `audio_capture.py` — `CallRecorder` class, same dual WASAPI mic+loopback approach as Phase 0 but start()/stop() on demand instead of a fixed duration.
+- `journal.py` — append-only JSONL event logger (`recording_started`, `recording_stopped`, `transcription_started`, `transcription_completed`, `error`).
+- `transcriber.py` — loads the faster-whisper model once at app startup (not per-call, to avoid repeating the ~2-30s load cost), transcribes mic+system after a call ends, writes `call.md` with YAML frontmatter (start/end time, duration, device names) + the merged Me/Them transcript.
+- `app.py` — the tray icon app itself: pystray icon with idle/recording/transcribing states (green/red/blue), right-click menu (Start/Stop, Open Calls Folder, Quit), and a global `Ctrl+Shift+R` hotkey via the `keyboard` library. Output goes to `~\Claude\calls\<timestamp>\`, matching the format Ascolto itself uses.
+
+**Testing performed:**
+1. Automated smoke test: simulated the hotkey twice from a second script (`simulate_hotkey_test.py`) while the app ran in the background — validated the full pipeline (start → capture → stop → transcribe → write files) with zero human interaction. Correctly produced 0 transcript segments on an 8-second silent clip (VAD filtering working as expected).
+2. Real end-to-end test by the user: pressed the hotkey, talked for ~29 seconds with a video playing through headphones, pressed again to stop. Result: 11 segments, correctly tagged Me/Them, transcribed in 4.2s (real-time factor ~0.15x). Confirmed accurate, coherent transcription and correct file output (`call.md`, `journal.jsonl`, `mic.wav`, `system.wav`).
+
+**Known rough edges / not yet done:**
+- No installer/packaging — currently run manually via `venv\Scripts\python.exe app.py`. Not set to start automatically at login (intentionally, since manual-trigger was the whole point).
+- No settings UI (device selection, model size, calls folder location are all hardcoded constants at the top of `app.py`).
+- No pause/resume mid-call.
+- The `keyboard` library's global hotkey hook has known quirks in some contexts (e.g. elevated/admin windows can block it) — not yet stress-tested against that.
+
 ## Current state / what's next
 
-Phase 0 fully validates the concept. Not yet started: Phase 1 (the real C#/.NET tray-icon app — see PROJECT_BRIEF.md §7 for the phased plan). Paused here at the user's request to consolidate documentation before continuing.
+Both Phase 0 and Phase 1 are complete and validated with real usage. The core product works: manual hotkey/tray trigger, dual-channel local capture, fast accurate local GPU transcription, markdown output ready for Claude Code. Remaining work is polish (Phase 2 in the brief: settings, packaging, crash recovery, pause/resume) — not yet started, and not urgent given the app already works for its intended use.

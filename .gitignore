@@ -2,3 +2,5 @@ phase0/venv/
 phase0/__pycache__/
 phase0/captures/
 *.wav
+app/venv/
+app/__pycache__/
