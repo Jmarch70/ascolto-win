@@ -35,7 +35,10 @@ TARGET_SR = 16000
 
 
 def load_model(model_size: str = "medium"):
-    return WhisperModel(model_size, device="cuda", compute_type="float16")
+    # large models are borderline on 10GB VRAM at float16; use a quantized
+    # compute type for those to stay safely within budget.
+    compute_type = "int8_float16" if model_size.startswith("large") else "float16"
+    return WhisperModel(model_size, device="cuda", compute_type=compute_type)
 
 
 def _load_mono_16k(path: Path) -> np.ndarray:

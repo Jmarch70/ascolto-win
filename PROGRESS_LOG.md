@@ -59,6 +59,17 @@ Location: `phase0/` (Python venv + two scripts: `capture.py`, `transcribe.py`)
 - No pause/resume mid-call.
 - The `keyboard` library's global hotkey hook has known quirks in some contexts (e.g. elevated/admin windows can block it) — not yet stress-tested against that.
 
+## 2026-07-28 — Settings + pause/resume: COMPLETE
+
+Added the two remaining items from Phase 1's "rough edges" list:
+
+- **`config.py`** — persists mic device, system-audio device, model size, and calls folder to `~/.ascolto_win/config.json`. `audio_capture.py`'s `CallRecorder` now accepts explicit device index overrides (falls back to system default when `None`), and gained `list_mic_devices()`/`list_system_audio_devices()` helpers.
+- **`settings_window.py`** — a tkinter dialog (opened via a dedicated thread, its own `Tk()` instance, separate from pystray's loop) with dropdowns for mic/system device and model size, plus a folder browser for the calls location. Device/folder changes apply to the next recording; changing the model size triggers a background reload (tray icon shows "loading" state again) without needing to restart the whole app.
+- **Pause/resume** — `CallRecorder.pause()`/`resume()` just call `stream.stop_stream()`/`start_stream()` on the already-open PyAudio streams, so paused stretches simply aren't written to the WAV files (no dead air, no separate file segments to stitch back together). New `Ctrl+Shift+P` hotkey and tray menu label toggle between "Pause Recording"/"Resume Recording", independent of the `Ctrl+Shift+R` start/stop hotkey. Tray icon adds an orange "paused" state.
+- `transcriber.py` now picks `int8_float16` compute type automatically for `large-v3` (float16 would be borderline tight on this machine's 10GB VRAM); `medium` and smaller stay at `float16`.
+
+**Testing:** automated hotkey-simulation scripts (`simulate_pause_test.py`) confirmed the pause/resume audio-exclusion behavior (paused period correctly absent from the output WAV, verified by checking file duration against wall-clock timestamps). The user visually confirmed the Settings window opens/closes correctly and did a real pause/resume recording — journal and transcript both came out correct (clean gap, no dead air, resumed content transcribed properly).
+
 ## Current state / what's next
 
-Both Phase 0 and Phase 1 are complete and validated with real usage. The core product works: manual hotkey/tray trigger, dual-channel local capture, fast accurate local GPU transcription, markdown output ready for Claude Code. Remaining work is polish (Phase 2 in the brief: settings, packaging, crash recovery, pause/resume) — not yet started, and not urgent given the app already works for its intended use.
+Phase 0, Phase 1, and the settings/pause-resume follow-up are all complete and validated with real usage, including by the user directly. The app now supports: manual hotkey/tray trigger, pause/resume mid-call, configurable devices/model/storage location, dual-channel local capture, fast accurate local GPU transcription, and markdown output ready for Claude Code. Remaining open items are lower priority: no installer/packaging (still run via `venv\Scripts\python.exe app.py`), not set to auto-start at login, no crash-recovery testing beyond the journal log existing.
