@@ -56,15 +56,19 @@ def _transcribe_source(model, audio: np.ndarray, tag: str):
     return [(seg.start, seg.end, tag, seg.text.strip()) for seg in segments if seg.text.strip()]
 
 
-def transcribe_call(model, out_dir: Path, meta: dict):
+def transcribe_call(model, audio_dir: Path, vault_dir: Path, meta: dict):
     """meta must include: start_time (iso str), end_time (iso str),
-    duration_seconds (float), mic_device (str), system_device (str)."""
+    duration_seconds (float), mic_device (str), system_device (str).
 
-    append_event(out_dir, "transcription_started")
+    audio_dir holds mic.wav/system.wav/journal.jsonl (stays local, e.g. on D:).
+    vault_dir is where call.md gets written (inside the Obsidian vault),
+    with a frontmatter link back to audio_dir for re-transcription/listening."""
+
+    append_event(audio_dir, "transcription_started")
     t0 = time.time()
 
-    mic_path = out_dir / "mic.wav"
-    system_path = out_dir / "system.wav"
+    mic_path = audio_dir / "mic.wav"
+    system_path = audio_dir / "system.wav"
 
     all_segments = []
     if mic_path.exists():
@@ -84,12 +88,16 @@ def transcribe_call(model, out_dir: Path, meta: dict):
         "duration_seconds": round(meta["duration_seconds"], 1),
         "mic_device": meta["mic_device"],
         "system_device": meta["system_device"],
+        "audio_folder": str(audio_dir),
     }
 
     call_md = "---\n" + yaml.safe_dump(frontmatter, sort_keys=False) + "---\n\n" + "\n".join(transcript_lines) + "\n"
-    (out_dir / "call.md").write_text(call_md, encoding="utf-8")
+
+    vault_dir.mkdir(parents=True, exist_ok=True)
+    call_md_path = vault_dir / "call.md"
+    call_md_path.write_text(call_md, encoding="utf-8")
 
     elapsed = time.time() - t0
-    append_event(out_dir, "transcription_completed", elapsed_seconds=round(elapsed, 1), segment_count=len(all_segments))
+    append_event(audio_dir, "transcription_completed", elapsed_seconds=round(elapsed, 1), segment_count=len(all_segments))
 
-    return out_dir / "call.md"
+    return call_md_path

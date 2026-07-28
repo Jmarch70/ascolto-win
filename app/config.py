@@ -10,7 +10,13 @@ DEFAULT_CONFIG = {
     "mic_device_index": None,      # None = system default microphone
     "system_device_index": None,   # None = system default speaker's loopback
     "model_size": "medium",
-    "calls_root": str(Path.home() / "Claude" / "calls"),
+    # Raw audio (mic.wav/system.wav) + journal.jsonl -- kept on D: (more free
+    # space) and out of the Obsidian vault entirely, since these are a few MB
+    # each and shouldn't bloat the vault's git history.
+    "audio_root": r"D:\claude-projects\CallAudio\calls",
+    # call.md transcripts land directly in the Obsidian vault so they're
+    # searchable/linkable in Obsidian like any other note.
+    "vault_root": r"D:\claude-projects\Vault01\Calls",
 }
 
 

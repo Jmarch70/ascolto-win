@@ -1,7 +1,8 @@
 """Settings dialog: microphone, system-audio device, transcription model
-size, and calls storage folder. Opened on demand from the tray menu -- runs
-its own Tk() instance in a dedicated thread rather than sharing a mainloop
-with pystray."""
+size, and the two storage locations (transcripts folder inside the Obsidian
+vault, audio folder for the raw WAVs + journal). Opened on demand from the
+tray menu -- runs its own Tk() instance in a dedicated thread rather than
+sharing a mainloop with pystray."""
 
 import tkinter as tk
 from tkinter import ttk, filedialog
@@ -73,18 +74,32 @@ def open_settings_window(current_config: dict, on_save):
 
     model_combo.bind("<<ComboboxSelected>>", on_model_change)
 
-    ttk.Label(frame, text="Calls folder:").grid(row=row, column=0, sticky="w", pady=4)
-    folder_var = tk.StringVar(value=current_config.get("calls_root", ""))
-    folder_entry = ttk.Entry(frame, textvariable=folder_var, width=32, state="readonly")
-    folder_entry.grid(row=row, column=1, sticky="w", pady=4)
+    ttk.Label(frame, text="Transcripts folder (Obsidian vault):").grid(row=row, column=0, sticky="w", pady=4)
+    vault_var = tk.StringVar(value=current_config.get("vault_root", ""))
+    vault_entry = ttk.Entry(frame, textvariable=vault_var, width=32, state="readonly")
+    vault_entry.grid(row=row, column=1, sticky="w", pady=4)
     row += 1
 
-    def browse_folder():
-        chosen = filedialog.askdirectory(initialdir=folder_var.get() or str(root))
+    def browse_vault_folder():
+        chosen = filedialog.askdirectory(initialdir=vault_var.get() or str(root))
         if chosen:
-            folder_var.set(chosen)
+            vault_var.set(chosen)
 
-    ttk.Button(frame, text="Browse...", command=browse_folder).grid(row=row, column=1, sticky="w")
+    ttk.Button(frame, text="Browse...", command=browse_vault_folder).grid(row=row, column=1, sticky="w")
+    row += 1
+
+    ttk.Label(frame, text="Audio storage folder (raw WAVs + logs):").grid(row=row, column=0, sticky="w", pady=4)
+    audio_var = tk.StringVar(value=current_config.get("audio_root", ""))
+    audio_entry = ttk.Entry(frame, textvariable=audio_var, width=32, state="readonly")
+    audio_entry.grid(row=row, column=1, sticky="w", pady=4)
+    row += 1
+
+    def browse_audio_folder():
+        chosen = filedialog.askdirectory(initialdir=audio_var.get() or str(root))
+        if chosen:
+            audio_var.set(chosen)
+
+    ttk.Button(frame, text="Browse...", command=browse_audio_folder).grid(row=row, column=1, sticky="w")
     row += 1
 
     note = ttk.Label(
@@ -103,7 +118,8 @@ def open_settings_window(current_config: dict, on_save):
             "mic_device_index": mic_index_by_label.get(mic_var.get()),
             "system_device_index": sys_index_by_label.get(sys_var.get()),
             "model_size": model_var.get(),
-            "calls_root": folder_var.get(),
+            "vault_root": vault_var.get(),
+            "audio_root": audio_var.get(),
         }
         on_save(new_config)
         root.destroy()

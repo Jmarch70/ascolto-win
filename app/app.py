@@ -7,8 +7,9 @@ this simple since it's used occasionally, not run 24/7. Ctrl+Shift+P
 pauses/resumes mid-call without ending it.
 
 Flow: click/hotkey to start -> dual WASAPI capture (mic + system audio) ->
-click/hotkey to stop -> local GPU transcription -> call.md + journal.jsonl
-written to <calls folder>/<timestamp>/.
+click/hotkey to stop -> local GPU transcription -> call.md written into the
+Obsidian vault, while mic.wav/system.wav/journal.jsonl stay in a separate
+local audio folder (kept out of the vault's git history).
 """
 
 import os
@@ -52,11 +53,14 @@ class App:
         self.model = None
         self.recorder = None
         self.current_out_dir = None
+        self.current_call_name = None
         self.call_start_time = None
 
         self.config = config_module.load_config()
-        self.calls_root = Path(self.config["calls_root"])
-        self.calls_root.mkdir(parents=True, exist_ok=True)
+        self.audio_root = Path(self.config["audio_root"])
+        self.vault_root = Path(self.config["vault_root"])
+        self.audio_root.mkdir(parents=True, exist_ok=True)
+        self.vault_root.mkdir(parents=True, exist_ok=True)
 
         self.icon = pystray.Icon(
             "ascolto-win",
@@ -66,7 +70,8 @@ class App:
                 pystray.MenuItem(self._primary_label, self._on_primary_action, default=True),
                 pystray.MenuItem("Stop Recording", self._on_stop_action, enabled=self._stop_enabled),
                 pystray.MenuItem("Settings...", self._on_settings, enabled=self._settings_enabled),
-                pystray.MenuItem("Open Calls Folder", self._on_open_folder),
+                pystray.MenuItem("Open Transcripts Folder (vault)", self._on_open_vault_folder),
+                pystray.MenuItem("Open Audio Folder", self._on_open_audio_folder),
                 pystray.MenuItem("Quit", self._on_quit),
             ),
         )
@@ -124,9 +129,13 @@ class App:
             return
         threading.Thread(target=self._open_settings_thread, daemon=True).start()
 
-    def _on_open_folder(self, icon, item):
-        self.calls_root.mkdir(parents=True, exist_ok=True)
-        os.startfile(str(self.calls_root))
+    def _on_open_vault_folder(self, icon, item):
+        self.vault_root.mkdir(parents=True, exist_ok=True)
+        os.startfile(str(self.vault_root))
+
+    def _on_open_audio_folder(self, icon, item):
+        self.audio_root.mkdir(parents=True, exist_ok=True)
+        os.startfile(str(self.audio_root))
 
     def _on_quit(self, icon, item):
         if self.state in (STATE_RECORDING, STATE_PAUSED):
@@ -158,8 +167,10 @@ class App:
 
     def _start_recording_locked(self):
         self.call_start_time = datetime.now(timezone.utc)
-        out_dir = self.calls_root / self.call_start_time.strftime("%Y-%m-%d-%H%M%S")
+        call_name = self.call_start_time.strftime("%Y-%m-%d-%H%M%S")
+        out_dir = self.audio_root / call_name
         self.current_out_dir = out_dir
+        self.current_call_name = call_name
         self.recorder = CallRecorder(
             out_dir,
             mic_device_index=self.config.get("mic_device_index"),
@@ -199,6 +210,7 @@ class App:
     def _stop_recording_locked(self):
         recorder = self.recorder
         out_dir = self.current_out_dir
+        vault_dir = self.vault_root / self.current_call_name
         start_time = self.call_start_time
         end_time = datetime.now(timezone.utc)
         duration = (end_time - start_time).total_seconds()
@@ -218,12 +230,12 @@ class App:
             "mic_device": recorder.mic_device_name,
             "system_device": recorder.system_device_name,
         }
-        threading.Thread(target=self._transcribe_in_background, args=(out_dir, meta), daemon=True).start()
+        threading.Thread(target=self._transcribe_in_background, args=(out_dir, vault_dir, meta), daemon=True).start()
 
-    def _transcribe_in_background(self, out_dir: Path, meta: dict):
+    def _transcribe_in_background(self, out_dir: Path, vault_dir: Path, meta: dict):
         try:
-            transcriber.transcribe_call(self.model, out_dir, meta)
-            self.icon.notify(f"Call transcribed: {out_dir.name}")
+            transcriber.transcribe_call(self.model, out_dir, vault_dir, meta)
+            self.icon.notify(f"Call transcribed: {vault_dir.name}")
         except Exception as e:
             append_event(out_dir, "error", stage="transcription", message=str(e), traceback=traceback.format_exc())
             self.icon.notify(f"Transcription failed: {e}")
@@ -241,8 +253,10 @@ class App:
         self.config = new_config
         config_module.save_config(self.config)
 
-        self.calls_root = Path(self.config["calls_root"])
-        self.calls_root.mkdir(parents=True, exist_ok=True)
+        self.audio_root = Path(self.config["audio_root"])
+        self.vault_root = Path(self.config["vault_root"])
+        self.audio_root.mkdir(parents=True, exist_ok=True)
+        self.vault_root.mkdir(parents=True, exist_ok=True)
 
         if model_changed:
             with self.lock:

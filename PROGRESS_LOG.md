@@ -70,6 +70,20 @@ Added the two remaining items from Phase 1's "rough edges" list:
 
 **Testing:** automated hotkey-simulation scripts (`simulate_pause_test.py`) confirmed the pause/resume audio-exclusion behavior (paused period correctly absent from the output WAV, verified by checking file duration against wall-clock timestamps). The user visually confirmed the Settings window opens/closes correctly and did a real pause/resume recording — journal and transcript both came out correct (clean gap, no dead air, resumed content transcribed properly).
 
+## 2026-07-28 — Split storage: transcripts into the Obsidian vault, audio onto D:
+
+User wanted transcripts to land directly in the Obsidian vault (Vault01) for searchability/linking in Obsidian, while keeping the multi-MB raw audio files off of C: (limited space) and out of the vault's git history (audio bloats a notes-vault repo over time).
+
+**Config schema change**: `calls_root` (single folder) replaced with two independent settings:
+- `audio_root` (default `D:\claude-projects\CallAudio\calls`) — mic.wav/system.wav/journal.jsonl
+- `vault_root` (default `D:\claude-projects\Vault01\Calls`) — call.md only
+
+`transcriber.transcribe_call()` now takes both `audio_dir` and `vault_dir` separately, writes `call.md` into the vault side, and adds an `audio_folder` frontmatter field pointing back to the audio location for traceability (so a note in Obsidian can always find its source audio for re-transcription or listening). `app.py` and `settings_window.py` updated to match (two folder pickers in Settings now, and two "Open ... Folder" tray menu items instead of one).
+
+**Migration**: one real call from earlier testing (2026-07-28-192328, the "customer reference/value prop" test) was still sitting in the old default location (`~/Claude/calls`) and got manually migrated into the new split structure rather than deleted, since it was real content, not throwaway test data. The old `~/Claude/` folder and the old-schema `config.json` were removed since nothing else referenced them.
+
+**Testing**: automated hotkey-simulated recording confirmed `call.md` lands cleanly in `Vault01/Calls/<timestamp>/` with the audio_folder pointer, and audio+journal land in `CallAudio/calls/<timestamp>/` on D:.
+
 ## Current state / what's next
 
-Phase 0, Phase 1, and the settings/pause-resume follow-up are all complete and validated with real usage, including by the user directly. The app now supports: manual hotkey/tray trigger, pause/resume mid-call, configurable devices/model/storage location, dual-channel local capture, fast accurate local GPU transcription, and markdown output ready for Claude Code. Remaining open items are lower priority: no installer/packaging (still run via `venv\Scripts\python.exe app.py`), not set to auto-start at login, no crash-recovery testing beyond the journal log existing.
+Phase 0, Phase 1, the settings/pause-resume follow-up, and the vault storage split are all complete and validated. The app now supports: manual hotkey/tray trigger, pause/resume mid-call, configurable devices/model/two storage locations, dual-channel local capture, fast accurate local GPU transcription, and transcripts landing directly in the Obsidian vault. Remaining open items are lower priority: no installer/packaging (still run via `venv\Scripts\python.exe app.py`), not set to auto-start at login, no crash-recovery testing beyond the journal log existing.
