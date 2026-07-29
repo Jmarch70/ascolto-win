@@ -84,6 +84,10 @@ User wanted transcripts to land directly in the Obsidian vault (Vault01) for sea
 
 **Testing**: automated hotkey-simulated recording confirmed `call.md` lands cleanly in `Vault01/Calls/<timestamp>/` with the audio_folder pointer, and audio+journal land in `CallAudio/calls/<timestamp>/` on D:.
 
+## 2026-07-28 — Pushed to GitHub
+
+Created a new **public** repo, [`Jmarch70/ascolto-win`](https://github.com/Jmarch70/ascolto-win), and pushed all local history to it. Added `README.md` (credits [Rob's original Ascolto](https://github.com/robiyuen-24601/ascolto) up front as the direct inspiration, explains why this is a from-scratch Windows build rather than a port) and `app/requirements.txt` (generated from the actual venv via `pip freeze`) beforehand so the repo is usable by someone landing on it cold. Confirmed via `git ls-files` that only source + docs are tracked — no venvs, no audio, nothing bulky. User was told upfront the docs mention his name and "between jobs" status and chose public anyway.
+
 ## Current state / what's next
 
 Phase 0, Phase 1, the settings/pause-resume follow-up, and the vault storage split are all complete and validated. The app now supports: manual hotkey/tray trigger, pause/resume mid-call, configurable devices/model/two storage locations, dual-channel local capture, fast accurate local GPU transcription, and transcripts landing directly in the Obsidian vault. Remaining open items are lower priority: no installer/packaging (still run via `venv\Scripts\python.exe app.py`), not set to auto-start at login, no crash-recovery testing beyond the journal log existing.
