@@ -97,3 +97,11 @@ Phase 0, Phase 1, the settings/pause-resume follow-up, and the vault storage spl
 ## 2026-07-28 — Companion `summarize-call` Claude Code skill (lives in the vault, not this repo)
 
 This repo only produces the raw transcript (`call.md`). To turn that into a Granola-style summary (TL;DR, key points, decisions, action items), added a project-scoped skill at `Vault01/.claude/skills/summarize-call/SKILL.md` — outside this repo, since it's a vault-side workflow tool, not app code. It reads a given call's `call.md`, asks before guessing who "Them" is if that matters for the summary, and appends a `## Summary` section above the existing transcript without altering the transcript itself. Auto-available in any Claude Code session rooted in Vault01, no per-session setup.
+
+## 2026-07-28 — "App didn't start" turned out to be a terminal quirk, not a bug; added start.bat
+
+User reported the app "didn't start." Debugging: launching it myself via Bash produced zero errors and a live process (model loaded, ~288MB), so the code itself was fine. Root cause, once the user pasted their actual terminal transcript: the command had gotten duplicated with no space (`venv\Scripts\python.exe app.pyvenv\Scripts\python.exe app.py`), which is a paste/terminal artifact (cause unconfirmed — possibly leftover buffered input on the line before the paste landed), not an app issue. Python correctly reported "file not found" (exit code 2) trying to open the mangled path. Confirmed via Windows Defender's threat detection log that antivirus wasn't silently killing the process either (worth ruling out generally, since the `keyboard` library's global hook can resemble keylogger behavior to AV software) — no detections were python.exe-related.
+
+Once the user typed the command fresh into an empty line (Escape first to clear the buffer), it started correctly.
+
+Added `app/start.bat` as the recommended way to launch going forward — double-click, no typing/pasting required, so this class of issue can't recur. It `cd /d`s to its own directory (works regardless of where it's launched from) and ends with `pause` so any crash text stays on screen instead of the window closing instantly.
