@@ -91,3 +91,5 @@ Created a new **public** repo, [`Jmarch70/ascolto-win`](https://github.com/Jmarc
 ## Current state / what's next
 
 Phase 0, Phase 1, the settings/pause-resume follow-up, and the vault storage split are all complete and validated. The app now supports: manual hotkey/tray trigger, pause/resume mid-call, configurable devices/model/two storage locations, dual-channel local capture, fast accurate local GPU transcription, and transcripts landing directly in the Obsidian vault. Remaining open items are lower priority: no installer/packaging (still run via `venv\Scripts\python.exe app.py`), not set to auto-start at login, no crash-recovery testing beyond the journal log existing.
+
+**Planned next step (not started)**: measure actual transcription accuracy rather than relying on eyeballing outputs. Plan is to have the user read a known paragraph aloud, then diff the resulting transcript word-for-word against the source text to get a real word-error-rate figure for this specific mic/room/model setup — current accuracy claims are qualitative only (outputs have looked coherent and correct in every real test so far, but nothing's been measured against ground truth).
