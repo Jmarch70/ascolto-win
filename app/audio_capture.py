@@ -8,6 +8,7 @@ speech and confirmed loopback only produces data while audio is actively
 playing (silence -> zero packets, not silent packets -- not a bug).
 """
 
+import threading
 import wave
 from pathlib import Path
 
@@ -60,6 +61,16 @@ class CallRecorder:
         self.mic_device_name = None
         self.system_device_name = None
         self.is_paused = False
+
+        # Tracked so the app can run a silence watchdog: system-audio capture
+        # can run error-free all call while receiving ~nothing, if the call
+        # app's actual audio output isn't the device this loopback tap is on
+        # (e.g. Windows' "default communications" playback device diverged
+        # from the "default" device this snapshots at start()). That failure
+        # is silent at the code level -- no exception, no dropped stream --
+        # so it has to be caught by watching for a stalled byte count instead.
+        self._sys_bytes_lock = threading.Lock()
+        self._sys_bytes_total = 0
 
     def _open_mic_writer(self):
         if self.mic_device_index is not None:
@@ -116,6 +127,8 @@ class CallRecorder:
 
         def callback(in_data, frame_count, time_info, status):
             wf.writeframes(in_data)
+            with self._sys_bytes_lock:
+                self._sys_bytes_total += len(in_data)
             return (in_data, pyaudio.paContinue)
 
         stream = self._pa.open(
@@ -133,6 +146,14 @@ class CallRecorder:
         self._pa = pyaudio.PyAudio()
         self._mic_stream, self._mic_wf = self._open_mic_writer()
         self._sys_stream, self._sys_wf = self._open_loopback_writer()
+
+    def system_bytes_written(self) -> int:
+        """Total bytes written to system.wav so far this recording. Polled by
+        the app's silence watchdog -- a stalled count while recording (not
+        paused) means the loopback tap isn't hearing anything, which usually
+        means the call's actual audio is going out a different device."""
+        with self._sys_bytes_lock:
+            return self._sys_bytes_total
 
     def pause(self):
         for stream in (self._mic_stream, self._sys_stream):

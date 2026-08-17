@@ -31,6 +31,15 @@ from settings_window import open_settings_window
 START_HOTKEY = "ctrl+shift+r"
 PAUSE_HOTKEY = "ctrl+shift+p"
 
+# System-audio silence watchdog: how often to check, and how long the
+# system-audio byte count can go flat (while actively recording) before we
+# warn. Catches a loopback tap silently listening to the wrong device --
+# e.g. the call app's audio output isn't the device Ascolto snapshotted as
+# "default" at record-start -- within a minute or two instead of only after
+# the call ends with an empty system.wav.
+SILENCE_CHECK_INTERVAL_SECONDS = 15
+SILENCE_WARNING_THRESHOLD_SECONDS = 60
+
 STATE_LOADING = "loading"
 STATE_IDLE = "idle"
 STATE_RECORDING = "recording"
@@ -55,6 +64,7 @@ class App:
         self.current_out_dir = None
         self.current_call_name = None
         self.call_start_time = None
+        self._silence_watchdog_stop = None
 
         self.config = config_module.load_config()
         self.audio_root = Path(self.config["audio_root"])
@@ -189,6 +199,13 @@ class App:
         )
         self._set_state(STATE_RECORDING, title="Ascolto (recording...)")
 
+        self._silence_watchdog_stop = threading.Event()
+        threading.Thread(
+            target=self._silence_watchdog,
+            args=(self.recorder, self._silence_watchdog_stop),
+            daemon=True,
+        ).start()
+
     def _pause_recording_locked(self):
         try:
             self.recorder.pause()
@@ -207,7 +224,42 @@ class App:
         append_event(self.current_out_dir, "recording_resumed")
         self._set_state(STATE_RECORDING, title="Ascolto (recording...)")
 
+    def _silence_watchdog(self, recorder, stop_event):
+        """Runs for the life of one recording. Warns once per silent stretch
+        if system.wav's byte count stalls for SILENCE_WARNING_THRESHOLD_SECONDS
+        while actively recording (paused time doesn't count against it, since
+        no bytes are expected then). Resets and can warn again if audio comes
+        back and then stalls a second time."""
+        last_bytes = 0
+        silent_seconds = 0
+        notified = False
+        while not stop_event.wait(SILENCE_CHECK_INTERVAL_SECONDS):
+            with self.lock:
+                state = self.state
+            if state == STATE_PAUSED:
+                silent_seconds = 0
+                continue
+            if state != STATE_RECORDING:
+                continue
+
+            current_bytes = recorder.system_bytes_written()
+            if current_bytes > last_bytes:
+                last_bytes = current_bytes
+                silent_seconds = 0
+                notified = False
+            else:
+                silent_seconds += SILENCE_CHECK_INTERVAL_SECONDS
+                if silent_seconds >= SILENCE_WARNING_THRESHOLD_SECONDS and not notified:
+                    self.icon.notify(
+                        "No system audio detected -- check your call app's "
+                        "speaker/output device matches Ascolto's."
+                    )
+                    notified = True
+
     def _stop_recording_locked(self):
+        if self._silence_watchdog_stop is not None:
+            self._silence_watchdog_stop.set()
+
         recorder = self.recorder
         out_dir = self.current_out_dir
         vault_dir = self.vault_root / self.current_call_name
